@@ -67,7 +67,7 @@ class _ListadoFichasScreenState extends State<ListadoFichasScreen> {
               padding: EdgeInsets.all(tokens.espacioBase * 2),
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: esAncho ? 2 : 1,
-                mainAxisExtent: esAncho ? 120 : null,
+                mainAxisExtent: esAncho ? 160 : null,
                 crossAxisSpacing: tokens.espacioBase * 2,
                 mainAxisSpacing: tokens.espacioBase * 2,
                 childAspectRatio: esAncho ? 1 : 3, 
