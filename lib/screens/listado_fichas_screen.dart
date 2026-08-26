@@ -1,66 +1,47 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import '../providers/ficha_provider.dart';
 import '../components/vista_estado.dart';
 import '../components/tarjeta_ficha.dart';
 import '../theme/tokens_app.dart';
 
-class ListadoFichasScreen extends StatefulWidget {
+class ListadoFichasScreen extends StatelessWidget {
   const ListadoFichasScreen({super.key});
-
-  @override
-  State<ListadoFichasScreen> createState() => _ListadoFichasScreenState();
-}
-
-class _ListadoFichasScreenState extends State<ListadoFichasScreen> {
-  TipoVistaEstado? _estado;
-  List<Map<String, String>> _fichas = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _cargarDatos();
-  }
-
-  Future<void> _cargarDatos() async {
-    setState(() {
-      _estado = TipoVistaEstado.cargando;
-    });
-    
-    // Simulamos una latencia de red
-    await Future.delayed(const Duration(seconds: 2));
-
-    // Simulando que los datos llegaron con xito (cambia esto a TipoVistaEstado.error o vacio para probar)
-    setState(() {
-      _estado = null;
-      _fichas = [
-        {'modelo': 'Galaxy S24 Ultra', 'fabricante': 'Samsung', 'procesador': 'Snapdragon 8 Gen 3'},
-        {'modelo': 'iPhone 15 Pro Max', 'fabricante': 'Apple', 'procesador': 'A17 Pro'},
-        {'modelo': 'Pixel 8 Pro', 'fabricante': 'Google', 'procesador': 'Tensor G3'},
-      ];
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<TokensApp>()!;
+    final fichaProvider = context.watch<FichaProvider>();
+    final fichas = fichaProvider.fichas;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Catlogo de Dispositivos'),
+        title: const Text('Catálogo de Dispositivos'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/'),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            tooltip: 'Ir al Buscador con IA',
+            onPressed: () => context.go('/'),
+          ),
+        ],
       ),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            if (_estado != null) {
+            if (fichas.isEmpty) {
               return VistaEstado(
-                tipo: _estado!,
-                mensaje: _estado == TipoVistaEstado.cargando 
-                    ? 'Cargando dispositivos...' 
-                    : (_estado == TipoVistaEstado.error ? 'Hubo un error de conexin' : 'No hay dispositivos registrados'),
-                onReintentar: _cargarDatos,
+                tipo: TipoVistaEstado.vacio,
+                mensaje: 'No hay dispositivos registrados en el catálogo.',
+                onReintentar: () => context.go('/'),
               );
             }
 
-            // Comportamiento responsivo: cuadricula si hay espacio, lista si es estrecho
+            // Comportamiento responsivo: cuadrícula en pantallas anchas, lista en estrechas
             final bool esAncho = constraints.maxWidth > 600;
 
             return GridView.builder(
@@ -70,28 +51,26 @@ class _ListadoFichasScreenState extends State<ListadoFichasScreen> {
                 mainAxisExtent: esAncho ? 160 : null,
                 crossAxisSpacing: tokens.espacioBase * 2,
                 mainAxisSpacing: tokens.espacioBase * 2,
-                childAspectRatio: esAncho ? 1 : 3, 
+                childAspectRatio: esAncho ? 1 : 3,
               ),
-              itemCount: _fichas.length,
+              itemCount: fichas.length,
               itemBuilder: (context, index) {
-                final ficha = _fichas[index];
+                final ficha = fichas[index];
                 return TarjetaFicha(
-                  modelo: ficha['modelo']!,
-                  fabricante: ficha['fabricante']!,
-                  procesador: ficha['procesador'],
-                  compacta: !esAncho, // Si no es ancho, la mostramos compacta
+                  modelo: ficha.modelo,
+                  fabricante: ficha.fabricante ?? 'Oficial',
+                  procesador: ficha.procesador,
+                  compacta: !esAncho,
                   onPulsar: () {
-                    // Solo como log o delegacin de intencin
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Seleccionado: ${ficha['modelo']}')),
-                    );
+                    // Navegación declarativa hacia el detalle con parámetro de ruta
+                    context.go('/fichas/${ficha.idFicha ?? index}');
                   },
                   accionFinal: Semantics(
-                    label: 'Marcar ${ficha['modelo']} como favorito',
+                    label: 'Ver detalles de ${ficha.modelo}',
                     button: true,
                     child: IconButton(
-                      icon: const Icon(Icons.favorite_border),
-                      onPressed: () {},
+                      icon: const Icon(Icons.arrow_forward_ios, size: 16),
+                      onPressed: () => context.go('/fichas/${ficha.idFicha ?? index}'),
                     ),
                   ),
                 );
@@ -99,6 +78,11 @@ class _ListadoFichasScreenState extends State<ListadoFichasScreen> {
             );
           },
         ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        icon: const Icon(Icons.add),
+        label: const Text('Nueva Ficha'),
+        onPressed: () => context.go('/admin/nueva-ficha'),
       ),
     );
   }
