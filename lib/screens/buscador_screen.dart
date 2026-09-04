@@ -40,43 +40,52 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        titleSpacing: 10,
         title: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.auto_awesome, color: Colors.amber),
-            const SizedBox(width: 8),
-            Text('FichaAI', style: tema.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+            const Icon(Icons.auto_awesome, color: Colors.amber, size: 20),
+            const SizedBox(width: 6),
+            Text('FichaAI', style: tema.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
           ],
         ),
         actions: [
           TextButton.icon(
-            icon: const Icon(Icons.list_alt),
-            label: const Text('Catálogo'),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              visualDensity: VisualDensity.compact,
+            ),
+            icon: const Icon(Icons.list_alt, size: 18),
+            label: const Text('Catálogo', style: TextStyle(fontSize: 13)),
             onPressed: () => context.go('/catalogo'),
           ),
           if (auth.estaAutenticado) ...[
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+              padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 2.0),
               child: Chip(
                 avatar: CircleAvatar(
                   backgroundColor: tema.colorScheme.primary,
-                  child: const Icon(Icons.person, size: 14, color: Colors.white),
+                  child: const Icon(Icons.person, size: 13, color: Colors.white),
                 ),
                 label: Text(
-                  '${auth.usuario} (${auth.rol})',
+                  auth.usuario ?? 'admin',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    fontSize: 12,
+                    fontSize: 11,
                     color: tema.colorScheme.primary,
                   ),
                 ),
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 4),
                 backgroundColor: tema.colorScheme.primaryContainer.withValues(alpha: 0.3),
                 side: BorderSide(color: tema.colorScheme.primary.withValues(alpha: 0.3)),
-                padding: const EdgeInsets.symmetric(horizontal: 4),
               ),
             ),
             IconButton(
-              icon: const Icon(Icons.logout),
+              icon: const Icon(Icons.logout, size: 20),
               tooltip: 'Cerrar Sesión (${auth.usuario})',
+              padding: const EdgeInsets.all(6),
+              visualDensity: VisualDensity.compact,
               onPressed: () async {
                 await auth.logout();
                 if (context.mounted) {

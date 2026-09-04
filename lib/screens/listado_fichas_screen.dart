@@ -41,7 +41,8 @@ class ListadoFichasScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Catálogo de Dispositivos'),
+        titleSpacing: 10,
+        title: const Text('Catálogo', style: TextStyle(fontWeight: FontWeight.bold)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go('/'),
