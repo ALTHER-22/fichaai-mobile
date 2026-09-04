@@ -47,6 +47,26 @@ class ListadoFichasScreen extends StatelessWidget {
           onPressed: () => context.go('/'),
         ),
         actions: [
+          if (authProvider.estaAutenticado)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+              child: Chip(
+                avatar: CircleAvatar(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  child: const Icon(Icons.person, size: 14, color: Colors.white),
+                ),
+                label: Text(
+                  '${authProvider.usuario}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                backgroundColor: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+              ),
+            ),
           // Botón para forzar sincronización manual de la cola Outbox
           if (syncService.sincronizando)
             const Padding(

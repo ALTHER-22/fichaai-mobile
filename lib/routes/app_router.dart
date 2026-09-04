@@ -7,6 +7,8 @@ import '../screens/detalle_ficha_screen.dart';
 import '../screens/formulario_ficha_screen.dart';
 import '../screens/login_screen.dart';
 
+final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+
 class AppRouter {
   static GoRouter createRouter(AuthProvider authProvider) {
     return GoRouter(

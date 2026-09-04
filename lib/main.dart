@@ -8,6 +8,7 @@ import 'providers/auth_provider.dart';
 import 'providers/ficha_provider.dart';
 import 'services/connectivity_service.dart';
 import 'services/sync_service.dart';
+import 'package:go_router/go_router.dart';
 import 'routes/app_router.dart';
 
 void main() async {
@@ -39,7 +40,7 @@ void main() async {
   ));
 }
 
-class FichaAIApp extends StatelessWidget {
+class FichaAIApp extends StatefulWidget {
   final AuthProvider authProvider;
   final FichaProvider fichaProvider;
 
@@ -50,23 +51,33 @@ class FichaAIApp extends StatelessWidget {
   });
 
   @override
+  State<FichaAIApp> createState() => _FichaAIAppState();
+}
+
+class _FichaAIAppState extends State<FichaAIApp> {
+  late final GoRouter _router;
+
+  @override
+  void initState() {
+    super.initState();
+    _router = AppRouter.createRouter(widget.authProvider);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider.value(value: authProvider),
-        ChangeNotifierProvider.value(value: fichaProvider),
+        ChangeNotifierProvider.value(value: widget.authProvider),
+        ChangeNotifierProvider.value(value: widget.fichaProvider),
         ChangeNotifierProvider.value(value: ConnectivityService.instance),
         ChangeNotifierProvider.value(value: SyncService.instance),
       ],
-      child: Consumer<AuthProvider>(
-        builder: (context, auth, _) {
-          return MaterialApp.router(
-            title: 'FichaAI',
-            debugShowCheckedModeBanner: false,
-            theme: AppTheme.claro,
-            routerConfig: AppRouter.createRouter(auth),
-          );
-        },
+      child: MaterialApp.router(
+        scaffoldMessengerKey: rootScaffoldMessengerKey,
+        title: 'FichaAI',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.claro,
+        routerConfig: _router,
       ),
     );
   }

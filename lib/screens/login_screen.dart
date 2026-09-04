@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../routes/app_router.dart';
 import '../theme/tokens_app.dart';
 import '../components/boton_primario.dart';
 
@@ -38,18 +39,44 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
 
     if (exito) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      rootScaffoldMessengerKey.currentState?.showSnackBar(
         SnackBar(
-          content: Text('¡Bienvenido, ${auth.usuario}!'),
-          backgroundColor: Colors.green,
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '¡Bienvenido, ${auth.usuario}! Sesión iniciada con éxito.',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.green.shade700,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
         ),
       );
       context.go(widget.redirectTo ?? '/');
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
+      rootScaffoldMessengerKey.currentState?.showSnackBar(
         SnackBar(
-          content: Text(auth.mensajeError ?? 'Error al iniciar sesión'),
-          backgroundColor: Colors.red,
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  auth.mensajeError ?? 'Error al iniciar sesión',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
         ),
       );
     }

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/ficha_provider.dart';
 import '../models/ficha_model.dart';
+import '../routes/app_router.dart';
 import '../theme/tokens_app.dart';
 import '../components/boton_primario.dart';
 
@@ -52,7 +53,27 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
             label: const Text('Catálogo'),
             onPressed: () => context.go('/catalogo'),
           ),
-          if (auth.estaAutenticado)
+          if (auth.estaAutenticado) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+              child: Chip(
+                avatar: CircleAvatar(
+                  backgroundColor: tema.colorScheme.primary,
+                  child: const Icon(Icons.person, size: 14, color: Colors.white),
+                ),
+                label: Text(
+                  '${auth.usuario} (${auth.rol})',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                    color: tema.colorScheme.primary,
+                  ),
+                ),
+                backgroundColor: tema.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                side: BorderSide(color: tema.colorScheme.primary.withValues(alpha: 0.3)),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+              ),
+            ),
             IconButton(
               icon: const Icon(Icons.logout),
               tooltip: 'Cerrar Sesión (${auth.usuario})',
@@ -60,7 +81,7 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
                 await auth.logout();
                 if (context.mounted) {
                   context.read<FichaProvider>().limpiarMemoria();
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  rootScaffoldMessengerKey.currentState?.showSnackBar(
                     const SnackBar(
                       content: Text('Sesión cerrada: Credenciales cifradas y almacén SQLite purgados (Normativa LOPDP).'),
                       backgroundColor: Colors.blueGrey,
@@ -69,8 +90,8 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
                   );
                 }
               },
-            )
-          else
+            ),
+          ] else
             IconButton(
               icon: const Icon(Icons.account_circle_outlined),
               tooltip: 'Iniciar Sesión',
@@ -86,7 +107,49 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                SizedBox(height: tokens.espacioBase * 2),
+                if (auth.estaAutenticado) ...[
+                  Container(
+                    margin: EdgeInsets.only(bottom: tokens.espacioBase * 2),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: tokens.espacioBase * 2,
+                      vertical: tokens.espacioBase * 1.5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(tokens.radioTarjeta),
+                      border: Border.all(color: Colors.green.shade300),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.verified_user, color: Colors.green.shade700, size: 28),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '¡Bienvenido, ${auth.usuario}!',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.green.shade900,
+                                  fontSize: 15,
+                                ),
+                              ),
+                              Text(
+                                'Sesión activa con rol "${auth.rol}". Token seguro almacenado en Keystore / Keychain.',
+                                style: TextStyle(
+                                  color: Colors.green.shade800,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                SizedBox(height: tokens.espacioBase),
                 // Encabezado tipo Google
                 Text(
                   'El Buscador Inteligente de Smartphones',
