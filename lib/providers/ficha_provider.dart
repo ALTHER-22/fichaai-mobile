@@ -1,69 +1,27 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:uuid/uuid.dart';
 import '../models/ficha_model.dart';
+import '../models/operacion_pendiente_model.dart';
 import '../components/vista_estado.dart';
+import '../services/database_helper.dart';
+import '../services/sync_service.dart';
 
+/// Proveedor de fichas técnicas con persistencia offline-first en SQLite,
+/// cola Outbox y sincronización resiliente.
 class FichaProvider extends ChangeNotifier {
-  final List<FichaModel> _fichas = [
-    const FichaModel(
-      idFicha: '1',
-      modelo: 'Samsung Galaxy A55 5G',
-      fabricante: 'Samsung',
-      procesador: 'Samsung Exynos 1480',
-      ram: '8 GB RAM',
-      almacenamiento: '256 GB',
-      pantalla: '6.6" Super AMOLED FHD+ 120Hz',
-      camaraPrincipal: '50 MP f/1.8 OIS',
-      camaraFrontal: '32 MP f/2.2',
-      bateria: '5000 mAh (25W)',
-      sistemaOperativo: 'Android 14 con One UI 6.1',
-      conectividad: '5G, Wi-Fi 6, Bluetooth 5.3, NFC',
-      extras: 'IP67 resistencia al agua, Gorilla Glass Victus+',
-      precioOficial: 449.0,
-      urlImagen: 'https://fdn2.gsmarena.com/vv/bigpic/samsung-galaxy-a55.jpg',
-    ),
-    const FichaModel(
-      idFicha: '2',
-      modelo: 'Tecno Spark 20 Pro Plus',
-      fabricante: 'Tecno',
-      procesador: 'MediaTek Helio G99 Ultimate',
-      ram: '8 GB RAM',
-      almacenamiento: '256 GB',
-      pantalla: '6.78" Curved AMOLED FHD+ a 120Hz',
-      camaraPrincipal: '108 MP f/1.75 con PDAF',
-      camaraFrontal: '32 MP con flash dual',
-      bateria: '5000 mAh (33W)',
-      sistemaOperativo: 'Android 14 con HIOS 14',
-      conectividad: '4G LTE, Wi-Fi 5, Bluetooth 5.2, NFC',
-      extras: 'IP53 resistencia, huella en pantalla',
-      precioOficial: 190.0,
-      urlImagen: 'https://fdn2.gsmarena.com/vv/bigpic/tecno-spark20-pro-plus.jpg',
-    ),
-    const FichaModel(
-      idFicha: '3',
-      modelo: 'Xiaomi 14 Ultra',
-      fabricante: 'Xiaomi',
-      procesador: 'Qualcomm Snapdragon 8 Gen 3',
-      ram: '16 GB RAM',
-      almacenamiento: '512 GB',
-      pantalla: '6.73" LTPO AMOLED WQHD+ 120Hz',
-      camaraPrincipal: '50 MP (1 pulgada) Leica Quad-Cam',
-      camaraFrontal: '32 MP',
-      bateria: '5000 mAh (90W cable / 80W inalámbrico)',
-      sistemaOperativo: 'Android 14 con HyperOS',
-      conectividad: '5G, Wi-Fi 7, Bluetooth 5.4, NFC',
-      extras: 'IP68 titanio, cámaras ópticas Leica',
-      precioOficial: 1499.0,
-      urlImagen: 'https://fdn2.gsmarena.com/vv/bigpic/xiaomi-14-ultra.jpg',
-    ),
-  ];
+  final DatabaseHelper _db = DatabaseHelper.instance;
+  final SyncService _syncService = SyncService.instance;
 
-  TipoVistaEstado _estado = TipoVistaEstado.vacio;
+  List<FichaModel> _fichas = [];
+  TipoVistaEstado _estado = TipoVistaEstado.cargando;
   bool _buscandoIA = false;
   String _mensajeError = '';
   FichaModel? _resultadoBusquedaIA;
   FichaModel? _fichaSeleccionada;
+  DateTime? _ultimaSincronizacion;
+  bool _inicializado = false;
 
   final String _baseUrl = 'http://127.0.0.1:5000/api';
 
@@ -73,13 +31,53 @@ class FichaProvider extends ChangeNotifier {
   String get mensajeError => _mensajeError;
   FichaModel? get resultadoBusquedaIA => _resultadoBusquedaIA;
   FichaModel? get fichaSeleccionada => _fichaSeleccionada;
+  DateTime? get ultimaSincronizacion => _ultimaSincronizacion ?? _syncService.ultimaSincronizacionExitosa;
+  int get operacionesPendientes => _syncService.operacionesPendientes;
+  bool get inicializado => _inicializado;
+
+  FichaProvider() {
+    _syncService.addListener(() {
+      // Cuando SyncService termina de procesar, recargar SQLite
+      cargarFichasLocales();
+    });
+  }
+
+  /// Carga inicial rápida desde la base de datos local SQLite (Lectura sin conexión)
+  Future<void> cargarFichasLocales() async {
+    try {
+      final lista = await _db.obtenerTodasLasFichas();
+      _fichas = lista;
+
+      if (_fichas.isEmpty) {
+        _estado = TipoVistaEstado.vacio;
+      }
+
+      // Obtener la fecha del dato local más reciente para calcular la antigüedad
+      if (_fichas.isNotEmpty) {
+        final primeraConFecha = _fichas.firstWhere(
+          (f) => f.fechaServidor != null || f.fechaGuardadoLocal.isNotEmpty,
+          orElse: () => _fichas.first,
+        );
+        final fechaStr = primeraConFecha.fechaServidor ?? primeraConFecha.fechaGuardadoLocal;
+        _ultimaSincronizacion = DateTime.tryParse(fechaStr) ?? DateTime.now();
+      }
+
+      _inicializado = true;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[FichaProvider] Error cargando datos locales SQLite: $e');
+      _estado = TipoVistaEstado.error;
+      _mensajeError = 'Error al leer la base de datos local';
+      notifyListeners();
+    }
+  }
 
   void actualizarEstado(TipoVistaEstado nuevo) {
     _estado = nuevo;
     notifyListeners();
   }
 
-  // Búsqueda inteligente con IA (Gemini 3.6 Flash a través del backend)
+  /// Búsqueda inteligente con IA (Gemini a través del backend)
   Future<FichaModel?> buscarConIA(String consulta, {String? token}) async {
     if (consulta.trim().isEmpty) return null;
 
@@ -97,7 +95,7 @@ class FichaProvider extends ChangeNotifier {
           if (token != null) 'Authorization': 'Bearer $token',
         },
         body: jsonEncode({'texto': consulta}),
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -110,15 +108,14 @@ class FichaProvider extends ChangeNotifier {
         }
       }
     } catch (e) {
-      debugPrint('[FichaProvider] Error consultando backend: $e');
+      debugPrint('[FichaProvider] Error consultando backend IA: $e');
     }
 
     // Fallback local enriquecido si el backend no responde
-    await Future.delayed(const Duration(milliseconds: 1500));
-    final coincidencias = _fichas.where((f) => 
-      f.modelo.toLowerCase().contains(consulta.toLowerCase()) ||
-      (f.fabricante?.toLowerCase().contains(consulta.toLowerCase()) ?? false)
-    ).toList();
+    await Future.delayed(const Duration(milliseconds: 1000));
+    final coincidencias = _fichas.where((f) =>
+        f.modelo.toLowerCase().contains(consulta.toLowerCase()) ||
+        (f.fabricante?.toLowerCase().contains(consulta.toLowerCase()) ?? false)).toList();
 
     if (coincidencias.isNotEmpty) {
       _resultadoBusquedaIA = coincidencias.first;
@@ -135,6 +132,7 @@ class FichaProvider extends ChangeNotifier {
         bateria: '5000 mAh (33W)',
         sistemaOperativo: 'Android 14',
         precioOficial: 299.0,
+        sincronizado: false,
       );
     }
 
@@ -145,7 +143,9 @@ class FichaProvider extends ChangeNotifier {
 
   FichaModel? obtenerPorId(String id) {
     try {
-      _fichaSeleccionada = _fichas.firstWhere((f) => f.idFicha == id);
+      _fichaSeleccionada = _fichas.firstWhere(
+        (f) => f.idLocal == id || f.idServidor == id || f.idFicha == id,
+      );
       return _fichaSeleccionada;
     } catch (e) {
       return null;
@@ -157,9 +157,17 @@ class FichaProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> guardarFicha(FichaModel nuevaFicha) async {
-    final fichaConId = FichaModel(
-      idFicha: (_fichas.length + 1).toString(),
+  /// Escritura sin conexión con Cola Outbox (Escritura Offline y Resiliencia):
+  /// 1. Asigna un UUID único del cliente para garantizar idempotencia.
+  /// 2. Aplica actualización optimista guardando en SQLite con sincronizado = 0.
+  /// 3. Encola la operación en la tabla Outbox `cola_operaciones`.
+  /// 4. Dispara el procesamiento asíncrono sin bloquear la interfaz.
+  Future<bool> guardarFicha(FichaModel nuevaFicha, {String? token}) async {
+    final idLocal = const Uuid().v4();
+    final ahora = DateTime.now().toIso8601String();
+
+    final fichaGuardar = FichaModel(
+      idLocal: idLocal,
       modelo: nuevaFicha.modelo,
       fabricante: nuevaFicha.fabricante ?? 'Genérico',
       procesador: nuevaFicha.procesador,
@@ -175,10 +183,47 @@ class FichaProvider extends ChangeNotifier {
       precioOficial: nuevaFicha.precioOficial,
       moneda: nuevaFicha.moneda,
       urlImagen: nuevaFicha.urlImagen,
+      sincronizado: false, // Marcada como pendiente de sincronización
+      fechaGuardadoLocal: ahora,
     );
 
-    _fichas.insert(0, fichaConId);
+    // 1. Guardar localmente en SQLite
+    await _db.insertarOActualizarFicha(fichaGuardar);
+
+    // 2. Encolar en la tabla Outbox con UUID único de cliente
+    final opId = const Uuid().v4();
+    final operacion = OperacionPendienteModel(
+      idOperacion: opId,
+      tipoOperacion: 'CREAR_FICHA',
+      idEntidadLocal: idLocal,
+      payload: jsonEncode(fichaGuardar.toJson()),
+      creadoEn: ahora,
+    );
+    await _db.encolarOperacion(operacion);
+
+    // 3. Actualización optimista en memoria para respuesta instantánea de UI
+    _fichas.insert(0, fichaGuardar);
     notifyListeners();
+
+    // 4. Intentar procesar la cola si hay red disponible
+    _syncService.procesarColaPendiente(token: token);
+
     return true;
+  }
+
+  /// Dispara la sincronización manual bajo demanda del usuario
+  Future<void> forzarSincronizacion({String? token}) async {
+    await _syncService.procesarColaPendiente(token: token);
+    await _syncService.sincronizarDesdeServidor(token: token);
+    await cargarFichasLocales();
+  }
+
+  /// Limpia la memoria local del catálogo (llamado en el cierre de sesión)
+  void limpiarMemoria() {
+    _fichas.clear();
+    _resultadoBusquedaIA = null;
+    _fichaSeleccionada = null;
+    _estado = TipoVistaEstado.vacio;
+    notifyListeners();
   }
 }

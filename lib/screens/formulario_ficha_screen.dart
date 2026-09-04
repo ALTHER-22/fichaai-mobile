@@ -6,6 +6,7 @@ import '../providers/ficha_provider.dart';
 import '../models/ficha_model.dart';
 import '../theme/tokens_app.dart';
 import '../components/boton_primario.dart';
+import '../services/connectivity_service.dart';
 
 class FormularioFichaScreen extends StatefulWidget {
   const FormularioFichaScreen({super.key});
@@ -98,16 +99,24 @@ class _FormularioFichaScreenState extends State<FormularioFichaScreen> {
       urlImagen: _urlImagenController.text.trim().isNotEmpty ? _urlImagenController.text.trim() : null,
     );
 
-    await context.read<FichaProvider>().guardarFicha(nuevaFicha);
+    final auth = context.read<AuthProvider>();
+    final estaConectado = ConnectivityService.instance.estaConectado;
+
+    await context.read<FichaProvider>().guardarFicha(nuevaFicha, token: auth.token);
 
     setState(() => _guardando = false);
 
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('¡Ficha técnica registrada exitosamente en el backend!'),
-        backgroundColor: Colors.green,
+      SnackBar(
+        content: Text(
+          estaConectado
+              ? '¡Ficha técnica registrada y sincronizada con el backend!'
+              : '📝 Modo sin conexión: Ficha guardada en SQLite local y encolada en Outbox con UUID único.',
+        ),
+        backgroundColor: estaConectado ? Colors.green : Colors.orange.shade800,
+        duration: const Duration(seconds: 4),
       ),
     );
 
@@ -153,6 +162,34 @@ class _FormularioFichaScreenState extends State<FormularioFichaScreen> {
                     style: tema.textTheme.bodySmall?.copyWith(color: tema.colorScheme.outline),
                   ),
                   SizedBox(height: tokens.espacioBase * 2),
+
+                  if (!ConnectivityService.instance.estaConectado) ...[
+                    Container(
+                      padding: EdgeInsets.all(tokens.espacioBase),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade100,
+                        borderRadius: BorderRadius.circular(tokens.radioTarjeta),
+                        border: Border.all(color: Colors.amber.shade700),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.airplanemode_active, color: Colors.deepOrange.shade800),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Modo Sin Conexión: La ficha se guardará en SQLite local y se encolará en Outbox con UUID único para sincronización automática.',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.brown.shade900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: tokens.espacioBase * 1.5),
+                  ],
 
                   // Modelo (Obligatorio)
                   TextFormField(

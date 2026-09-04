@@ -8,6 +8,7 @@ class TarjetaFicha extends StatelessWidget {
     required this.fabricante,
     this.procesador,
     this.compacta = false,
+    this.sincronizado = true,
     this.onPulsar,
     this.accionFinal,
   });
@@ -16,6 +17,7 @@ class TarjetaFicha extends StatelessWidget {
   final String fabricante;
   final String? procesador;
   final bool compacta;
+  final bool sincronizado;
   final VoidCallback? onPulsar;
   final Widget? accionFinal;
 
@@ -28,6 +30,7 @@ class TarjetaFicha extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(tokens.radioTarjeta),
       ),
+      elevation: 2,
       child: InkWell(
         onTap: onPulsar,
         borderRadius: BorderRadius.circular(tokens.radioTarjeta),
@@ -39,12 +42,64 @@ class TarjetaFicha extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(modelo, style: tema.textTheme.titleLarge),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            modelo,
+                            style: tema.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        // Distintivo visible de sincronización / offline
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: sincronizado ? Colors.green.shade50 : Colors.amber.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: sincronizado ? Colors.green.shade600 : Colors.amber.shade800,
+                              width: 0.8,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                sincronizado ? Icons.check_circle : Icons.cloud_off,
+                                size: 12,
+                                color: sincronizado ? Colors.green.shade700 : Colors.amber.shade900,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                sincronizado ? 'Sincronizado' : 'Offline / Pendiente',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: sincronizado ? Colors.green.shade800 : Colors.amber.shade900,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                     SizedBox(height: tokens.espacioBase * 0.5),
-                    Text(fabricante, style: tema.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold)),
+                    Text(
+                      fabricante,
+                      style: tema.textTheme.bodyMedium?.copyWith(
+                        color: tema.colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                     if (!compacta && procesador != null) ...[
-                      SizedBox(height: tokens.espacioBase),
-                      Text('Procesador: $procesador', style: tema.textTheme.bodyMedium),
+                      SizedBox(height: tokens.espacioBase * 0.5),
+                      Text(
+                        'Procesador: $procesador',
+                        style: tema.textTheme.bodySmall?.copyWith(color: Colors.grey.shade700),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ]
                   ],
                 ),

@@ -56,11 +56,18 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
             IconButton(
               icon: const Icon(Icons.logout),
               tooltip: 'Cerrar Sesión (${auth.usuario})',
-              onPressed: () {
-                auth.logout();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Sesión cerrada correctamente.')),
-                );
+              onPressed: () async {
+                await auth.logout();
+                if (context.mounted) {
+                  context.read<FichaProvider>().limpiarMemoria();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Sesión cerrada: Credenciales cifradas y almacén SQLite purgados (Normativa LOPDP).'),
+                      backgroundColor: Colors.blueGrey,
+                      duration: Duration(seconds: 4),
+                    ),
+                  );
+                }
               },
             )
           else
