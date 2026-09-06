@@ -265,14 +265,6 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        icon: const Icon(Icons.add),
-        label: const Text('Registrar Ficha (Admin)'),
-        onPressed: () {
-          // Navegar a ruta protegida: Si no está autenticado, go_router redirige a /login
-          context.go('/admin/nueva-ficha');
-        },
-      ),
     );
   }
 
