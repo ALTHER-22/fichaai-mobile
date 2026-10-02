@@ -5,6 +5,7 @@ import '../providers/ficha_provider.dart';
 import '../models/ficha_model.dart';
 import '../theme/tokens_app.dart';
 import '../components/vista_estado.dart';
+import '../components/galeria_smartphone.dart';
 
 class DetalleFichaScreen extends StatelessWidget {
   final String idFicha;
@@ -67,28 +68,12 @@ class DetalleFichaScreen extends StatelessWidget {
                 padding: EdgeInsets.all(tokens.espacioBase * 2),
                 child: Column(
                   children: [
-                    if (ficha.urlImagen != null && ficha.urlImagen!.isNotEmpty) ...[
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(tokens.radioTarjeta),
-                        child: Image.network(
-                          ficha.urlImagen!,
-                          height: 200,
-                          fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) => Container(
-                            height: 150,
-                            color: Colors.grey.shade200,
-                            child: const Center(
-                              child: Icon(Icons.phone_android, size: 80, color: Colors.grey),
-                            ),
-                          ),
-                          loadingBuilder: (context, child, progress) {
-                            if (progress == null) return child;
-                            return const SizedBox(
-                              height: 150,
-                              child: Center(child: CircularProgressIndicator()),
-                            );
-                          },
-                        ),
+                    if (ficha.listaImagenes.isNotEmpty) ...[
+                      GaleriaSmartphone(
+                        imagenes: ficha.listaImagenes,
+                        modelo: ficha.modelo,
+                        fabricante: ficha.fabricante,
+                        altura: 230,
                       ),
                       SizedBox(height: tokens.espacioBase * 2),
                     ],

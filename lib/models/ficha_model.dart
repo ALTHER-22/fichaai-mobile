@@ -20,6 +20,11 @@ class FichaModel {
   final double? precioOficial;
   final String moneda;
   final String? urlImagen;
+  final List<String>? imagenes;
+  
+  // Capacidades nativas - Semana 14
+  final String? rutaImagenLocal;
+  final String? ubicacionRegistro;
 
   // Campos de control de sincronización y resolución de conflictos (LWW)
   final bool sincronizado;
@@ -45,6 +50,9 @@ class FichaModel {
     this.precioOficial,
     this.moneda = 'USD',
     this.urlImagen,
+    this.imagenes,
+    this.rutaImagenLocal,
+    this.ubicacionRegistro,
     this.sincronizado = true,
     this.fechaServidor,
     String? fechaGuardadoLocal,
@@ -53,6 +61,17 @@ class FichaModel {
 
   /// Getter de compatibilidad con pantallas existentes
   String? get idFicha => idServidor ?? idLocal;
+
+  /// Retorna la lista de todas las fotos oficiales disponibles para la galería interactiva
+  List<String> get listaImagenes {
+    if (imagenes != null && imagenes!.isNotEmpty) {
+      return imagenes!;
+    }
+    if (urlImagen != null && urlImagen!.trim().isNotEmpty) {
+      return [urlImagen!];
+    }
+    return [];
+  }
 
   FichaModel copyWith({
     String? idLocal,
@@ -72,6 +91,9 @@ class FichaModel {
     double? precioOficial,
     String? moneda,
     String? urlImagen,
+    List<String>? imagenes,
+    String? rutaImagenLocal,
+    String? ubicacionRegistro,
     bool? sincronizado,
     String? fechaServidor,
     String? fechaGuardadoLocal,
@@ -94,6 +116,9 @@ class FichaModel {
       precioOficial: precioOficial ?? this.precioOficial,
       moneda: moneda ?? this.moneda,
       urlImagen: urlImagen ?? this.urlImagen,
+      imagenes: imagenes ?? this.imagenes,
+      rutaImagenLocal: rutaImagenLocal ?? this.rutaImagenLocal,
+      ubicacionRegistro: ubicacionRegistro ?? this.ubicacionRegistro,
       sincronizado: sincronizado ?? this.sincronizado,
       fechaServidor: fechaServidor ?? this.fechaServidor,
       fechaGuardadoLocal: fechaGuardadoLocal ?? this.fechaGuardadoLocal,
@@ -122,6 +147,9 @@ class FichaModel {
           : null,
       moneda: json['moneda'] ?? 'USD',
       urlImagen: json['url_imagen'],
+      imagenes: (json['imagenes'] as List<dynamic>?)?.map((e) => e.toString()).toList(),
+      rutaImagenLocal: json['ruta_imagen_local'],
+      ubicacionRegistro: json['ubicacion_registro'],
       sincronizado: json['sincronizado'] == null ? true : (json['sincronizado'] == 1 || json['sincronizado'] == true),
       fechaServidor: json['fecha_generacion'] ?? json['fecha_servidor'],
       fechaGuardadoLocal: json['fecha_guardado_local'] ?? DateTime.now().toIso8601String(),
@@ -148,6 +176,9 @@ class FichaModel {
       if (precioOficial != null) 'precio_oficial': precioOficial,
       'moneda': moneda,
       if (urlImagen != null) 'url_imagen': urlImagen,
+      if (imagenes != null) 'imagenes': imagenes,
+      if (rutaImagenLocal != null) 'ruta_imagen_local': rutaImagenLocal,
+      if (ubicacionRegistro != null) 'ubicacion_registro': ubicacionRegistro,
     };
   }
 
@@ -171,6 +202,8 @@ class FichaModel {
       'precio_oficial': precioOficial,
       'moneda': moneda,
       'url_imagen': urlImagen,
+      'ruta_imagen_local': rutaImagenLocal,
+      'ubicacion_registro': ubicacionRegistro,
       'sincronizado': sincronizado ? 1 : 0,
       'fecha_servidor': fechaServidor,
       'fecha_guardado_local': fechaGuardadoLocal,
@@ -199,6 +232,9 @@ class FichaModel {
           : null,
       moneda: (map['moneda'] as String?) ?? 'USD',
       urlImagen: map['url_imagen'] as String?,
+      imagenes: map['url_imagen'] != null ? [map['url_imagen'] as String] : null,
+      rutaImagenLocal: map['ruta_imagen_local'] as String?,
+      ubicacionRegistro: map['ubicacion_registro'] as String?,
       sincronizado: (map['sincronizado'] as int? ?? 1) == 1,
       fechaServidor: map['fecha_servidor'] as String?,
       fechaGuardadoLocal: map['fecha_guardado_local'] as String?,

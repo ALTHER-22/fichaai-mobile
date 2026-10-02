@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../providers/auth_provider.dart';
 import '../providers/ficha_provider.dart';
 import '../models/ficha_model.dart';
@@ -32,6 +35,8 @@ class _FormularioFichaScreenState extends State<FormularioFichaScreen> {
 
   bool _guardando = false;
   String? _errorPrecioBackend;
+  String? _rutaImagenSeleccionada;
+  String? _ubicacionActual;
 
   @override
   void initState() {
@@ -69,19 +74,119 @@ class _FormularioFichaScreenState extends State<FormularioFichaScreen> {
     super.dispose();
   }
 
+  Future<void> _seleccionarImagen() async {
+    try {
+      // Usamos el selector del sistema sin pedir permiso de galería expresamente
+      final picker = ImagePicker();
+      final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+      if (pickedFile != null) {
+        setState(() {
+          _rutaImagenSeleccionada = pickedFile.path;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al seleccionar imagen: $e')),
+      );
+    }
+  }
+
+  Future<void> _capturarUbicacion() async {
+    bool servicioHabilitado = await Geolocator.isLocationServiceEnabled();
+    if (!servicioHabilitado) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('El servicio de ubicación (GPS) está desactivado.')),
+      );
+      return;
+    }
+
+    var estadoPermiso = await Permission.locationWhenInUse.status;
+
+    if (estadoPermiso.isDenied) {
+      if (!mounted) return;
+      // Mostrar explicación antes del diálogo del sistema
+      final confirmar = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Permiso de Ubicación'),
+          content: const Text('FichaAI necesita acceso a la ubicación para registrar dónde se realizó la inspección del dispositivo. ¿Deseas conceder el permiso?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Ahora no'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Continuar'),
+            ),
+          ],
+        ),
+      );
+      if (confirmar != true) return;
+      estadoPermiso = await Permission.locationWhenInUse.request();
+    }
+
+    if (estadoPermiso.isGranted) {
+      try {
+        final posicion = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium),
+        );
+        setState(() {
+          _ubicacionActual = '${posicion.latitude}, ${posicion.longitude}';
+        });
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('No se pudo obtener la ubicación: $e')),
+          );
+        }
+      }
+    } else if (estadoPermiso.isPermanentlyDenied) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Permiso Denegado Permanentemente'),
+          content: const Text('Para usar la ubicación debes habilitar el permiso en los Ajustes del sistema.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () {
+                openAppSettings();
+                Navigator.pop(ctx);
+              },
+              child: const Text('Abrir Ajustes'),
+            ),
+          ],
+        ),
+      );
+    } else if (estadoPermiso.isDenied) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Permiso de ubicación denegado.')),
+      );
+    }
+  }
+
   Future<void> _guardarFicha() async {
     setState(() => _errorPrecioBackend = null);
 
-    if (!_formKey.currentState!.validate()) return;
-
-    // Validación según el contrato del backend: precio > 0 (Semana 6 / 422 Unprocessable Entity)
-    final precio = double.tryParse(_precioController.text.trim());
-    if (precio != null && precio <= 0) {
-      setState(() {
-        _errorPrecioBackend = 'El precio debe ser mayor a 0 (Error 422: Unprocessable Entity)';
-      });
+    if (_modeloController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('El modelo del celular es obligatorio.'),
+          backgroundColor: Colors.red,
+        ),
+      );
       return;
     }
+
+    final precio = double.tryParse(_precioController.text.trim());
 
     setState(() => _guardando = true);
 
@@ -97,22 +202,56 @@ class _FormularioFichaScreenState extends State<FormularioFichaScreen> {
       bateria: _bateriaController.text.trim().isNotEmpty ? _bateriaController.text.trim() : null,
       precioOficial: precio,
       urlImagen: _urlImagenController.text.trim().isNotEmpty ? _urlImagenController.text.trim() : null,
+      rutaImagenLocal: _rutaImagenSeleccionada,
+      ubicacionRegistro: _ubicacionActual,
     );
 
     final auth = context.read<AuthProvider>();
+    final fichaProvider = context.read<FichaProvider>();
     final estaConectado = ConnectivityService.instance.estaConectado;
 
-    await context.read<FichaProvider>().guardarFicha(nuevaFicha, token: auth.token);
+    final exito = await fichaProvider.guardarFicha(nuevaFicha, token: auth.token);
 
     setState(() => _guardando = false);
 
     if (!mounted) return;
 
+    if (!exito) {
+      // Si el servidor respondió con 422 o error de cliente, asociar el error al campo correspondiente
+      if (fichaProvider.erroresValidacion.isNotEmpty) {
+        setState(() {
+          _errorPrecioBackend = fichaProvider.erroresValidacion['precio_oficial'] ??
+              'Error 422: Datos rechazados por el servidor';
+        });
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  fichaProvider.erroresValidacion.isNotEmpty
+                      ? 'Error 422 (Unprocessable Entity): ${fichaProvider.mensajeError}'
+                      : 'Error: ${fichaProvider.mensajeError}',
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
           estaConectado
-              ? '¡Ficha técnica registrada y sincronizada con el backend!'
+              ? '¡Ficha técnica registrada y confirmada por el backend!'
               : '📝 Modo sin conexión: Ficha guardada en SQLite local y encolada en Outbox con UUID único.',
         ),
         backgroundColor: estaConectado ? Colors.green : Colors.orange.shade800,
@@ -320,6 +459,68 @@ class _FormularioFichaScreenState extends State<FormularioFichaScreen> {
                       if (n <= 0) return 'El precio debe ser estrictamente mayor a 0';
                       return null;
                     },
+                  ),
+                  SizedBox(height: tokens.espacioBase * 1.5),
+
+                  // Capacidades Nativas (Semana 14)
+                  Card(
+                    elevation: 0,
+                    color: tema.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(tokens.radioTarjeta)),
+                    child: Padding(
+                      padding: EdgeInsets.all(tokens.espacioBase),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            'Datos de Inspección Local',
+                            style: tema.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          SizedBox(height: tokens.espacioBase),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: _seleccionarImagen,
+                                  icon: const Icon(Icons.photo_library),
+                                  label: const Text('Adjuntar Foto Local'),
+                                ),
+                              ),
+                              SizedBox(width: tokens.espacioBase),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: _capturarUbicacion,
+                                  icon: const Icon(Icons.location_on),
+                                  label: const Text('Fijar Ubicación'),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (_rutaImagenSeleccionada != null || _ubicacionActual != null) ...[
+                            SizedBox(height: tokens.espacioBase),
+                            if (_rutaImagenSeleccionada != null)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8.0),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.check_circle, color: Colors.green, size: 16),
+                                    const SizedBox(width: 8),
+                                    Expanded(child: Text('Foto seleccionada: ${_rutaImagenSeleccionada!.split('/').last}', style: tema.textTheme.bodySmall)),
+                                  ],
+                                ),
+                              ),
+                            if (_ubicacionActual != null)
+                              Row(
+                                children: [
+                                  const Icon(Icons.check_circle, color: Colors.green, size: 16),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: Text('Ubicación: $_ubicacionActual', style: tema.textTheme.bodySmall)),
+                                ],
+                              ),
+                          ],
+                        ],
+                      ),
+                    ),
                   ),
                   SizedBox(height: tokens.espacioBase * 1.5),
 

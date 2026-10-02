@@ -7,6 +7,7 @@ import '../models/ficha_model.dart';
 import '../routes/app_router.dart';
 import '../theme/tokens_app.dart';
 import '../components/boton_primario.dart';
+import '../components/galeria_smartphone.dart';
 
 class BuscadorScreen extends StatefulWidget {
   const BuscadorScreen({super.key});
@@ -306,19 +307,14 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
             const Divider(),
             SizedBox(height: tokens.espacioBase),
 
-            if (ficha.urlImagen != null) ...[
-              Center(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(tokens.radioTarjeta),
-                  child: Image.network(
-                    ficha.urlImagen!,
-                    height: 140,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.phone_android, size: 60),
-                  ),
-                ),
+            if (ficha.listaImagenes.isNotEmpty) ...[
+              GaleriaSmartphone(
+                imagenes: ficha.listaImagenes,
+                modelo: ficha.modelo,
+                fabricante: ficha.fabricante,
+                altura: 250,
               ),
-              SizedBox(height: tokens.espacioBase),
+              SizedBox(height: tokens.espacioBase * 1.5),
             ],
 
             Text(

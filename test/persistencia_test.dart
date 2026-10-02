@@ -88,6 +88,8 @@ void main() {
           precio_oficial REAL,
           moneda TEXT DEFAULT 'USD',
           url_imagen TEXT,
+          ruta_imagen_local TEXT,
+          ubicacion_registro TEXT,
           sincronizado INTEGER NOT NULL DEFAULT 1,
           fecha_servidor TEXT,
           fecha_guardado_local TEXT NOT NULL

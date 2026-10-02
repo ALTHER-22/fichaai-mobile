@@ -1,59 +1,69 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-import 'package:uuid/uuid.dart';
+import '../core/errors/fallo_red.dart';
 import '../models/ficha_model.dart';
-import '../models/operacion_pendiente_model.dart';
 import '../components/vista_estado.dart';
-import '../services/database_helper.dart';
+import '../data/repositories/ficha_repository.dart';
+import '../data/repositories/ficha_repository_impl.dart';
 import '../services/sync_service.dart';
 
-/// Proveedor de fichas técnicas con persistencia offline-first en SQLite,
-/// cola Outbox y sincronización resiliente.
+/// Proveedor de fichas técnicas (Capa de Estado / UI):
+///
+/// PRINCIPIO ARQUITECTÓNICO (Semana 13 - Criterio 5):
+/// - Desconoce por completo si el dato vino de la red, de SQLite o de una caché.
+/// - Consume exclusivamente la interfaz FichaRepository.
+/// - Traduce los errores del dominio (incluyendo 422 Unprocessable Entity)
+///   a estados de la interfaz y mapeo de errores por campo.
 class FichaProvider extends ChangeNotifier {
-  final DatabaseHelper _db = DatabaseHelper.instance;
-  final SyncService _syncService = SyncService.instance;
+  final FichaRepository _repositorio;
+  final SyncService _syncService;
 
   List<FichaModel> _fichas = [];
   TipoVistaEstado _estado = TipoVistaEstado.cargando;
   bool _buscandoIA = false;
   String _mensajeError = '';
+  Map<String, String> _erroresValidacion = {};
   FichaModel? _resultadoBusquedaIA;
   FichaModel? _fichaSeleccionada;
   DateTime? _ultimaSincronizacion;
   bool _inicializado = false;
 
-  final String _baseUrl = 'http://127.0.0.1:5000/api';
-
   List<FichaModel> get fichas => List.unmodifiable(_fichas);
   TipoVistaEstado get estado => _estado;
   bool get buscandoIA => _buscandoIA;
   String get mensajeError => _mensajeError;
+  Map<String, String> get erroresValidacion => _erroresValidacion;
   FichaModel? get resultadoBusquedaIA => _resultadoBusquedaIA;
   FichaModel? get fichaSeleccionada => _fichaSeleccionada;
   DateTime? get ultimaSincronizacion => _ultimaSincronizacion ?? _syncService.ultimaSincronizacionExitosa;
   int get operacionesPendientes => _syncService.operacionesPendientes;
   bool get inicializado => _inicializado;
 
-  FichaProvider() {
+  FichaProvider({
+    FichaRepository? repositorio,
+    SyncService? syncService,
+  })  : _repositorio = repositorio ?? FichaRepositoryImpl(),
+        _syncService = syncService ?? SyncService.instance {
     _syncService.addListener(() {
-      // Cuando SyncService termina de procesar, recargar SQLite
-      cargarFichasLocales();
+      cargarFichasLocales(sincronizarConServidor: false);
     });
   }
 
-  /// Carga inicial rápida desde la base de datos local SQLite (Lectura sin conexión)
-  Future<void> cargarFichasLocales() async {
+  /// Carga el catálogo mediante el repositorio (offline-first con revalidación)
+  Future<void> cargarFichasLocales({bool sincronizarConServidor = true}) async {
     try {
-      final lista = await _db.obtenerTodasLasFichas();
+      if (_fichas.isEmpty) {
+        _estado = TipoVistaEstado.cargando;
+        notifyListeners();
+      }
+
+      final lista = await _repositorio.obtenerFichas(
+        sincronizarConServidor: sincronizarConServidor,
+      );
       _fichas = lista;
 
       if (_fichas.isEmpty) {
         _estado = TipoVistaEstado.vacio;
-      }
-
-      // Obtener la fecha del dato local más reciente para calcular la antigüedad
-      if (_fichas.isNotEmpty) {
+      } else {
         final primeraConFecha = _fichas.firstWhere(
           (f) => f.fechaServidor != null || f.fechaGuardadoLocal.isNotEmpty,
           orElse: () => _fichas.first,
@@ -65,9 +75,9 @@ class FichaProvider extends ChangeNotifier {
       _inicializado = true;
       notifyListeners();
     } catch (e) {
-      debugPrint('[FichaProvider] Error cargando datos locales SQLite: $e');
+      debugPrint('[FichaProvider] Error cargando catálogo: $e');
       _estado = TipoVistaEstado.error;
-      _mensajeError = 'Error al leer la base de datos local';
+      _mensajeError = 'Error al leer el catálogo de dispositivos';
       notifyListeners();
     }
   }
@@ -77,7 +87,7 @@ class FichaProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Búsqueda inteligente con IA (Gemini a través del backend)
+  /// Búsqueda inteligente con IA (delegada al repositorio)
   Future<FichaModel?> buscarConIA(String consulta, {String? token}) async {
     if (consulta.trim().isEmpty) return null;
 
@@ -87,58 +97,26 @@ class FichaProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final url = Uri.parse('$_baseUrl/fichas/extraer-ia');
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({'texto': consulta}),
-      ).timeout(const Duration(seconds: 10));
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['exito'] == true && data['datos'] != null) {
-          final ficha = FichaModel.fromJson(data['datos']);
-          _resultadoBusquedaIA = ficha;
-          _buscandoIA = false;
-          notifyListeners();
-          return ficha;
-        }
+      final ficha = await _repositorio.buscarConIA(consulta);
+      _resultadoBusquedaIA = ficha;
+      if (ficha == null) {
+        _mensajeError = 'No se encontraron especificaciones para "$consulta".';
       }
+      _buscandoIA = false;
+      notifyListeners();
+      return ficha;
     } catch (e) {
-      debugPrint('[FichaProvider] Error consultando backend IA: $e');
+      if (e is FalloTimeout) {
+        _mensajeError = 'Tiempo de espera agotado al consultar la IA. Intente nuevamente.';
+      } else if (e is FalloSinConexion) {
+        _mensajeError = 'Sin conexión con el backend de FichaAI. Verifique su red.';
+      } else {
+        _mensajeError = 'No se pudo consultar el servicio de IA.';
+      }
+      _buscandoIA = false;
+      notifyListeners();
+      return null;
     }
-
-    // Fallback local enriquecido si el backend no responde
-    await Future.delayed(const Duration(milliseconds: 1000));
-    final coincidencias = _fichas.where((f) =>
-        f.modelo.toLowerCase().contains(consulta.toLowerCase()) ||
-        (f.fabricante?.toLowerCase().contains(consulta.toLowerCase()) ?? false)).toList();
-
-    if (coincidencias.isNotEmpty) {
-      _resultadoBusquedaIA = coincidencias.first;
-    } else {
-      _resultadoBusquedaIA = FichaModel(
-        modelo: consulta,
-        fabricante: consulta.split(' ').first,
-        procesador: 'Chipset inteligente detectado',
-        ram: '8 GB RAM',
-        almacenamiento: '256 GB',
-        pantalla: '6.7" AMOLED FHD+ 120Hz',
-        camaraPrincipal: '50 MP con OIS',
-        camaraFrontal: '16 MP',
-        bateria: '5000 mAh (33W)',
-        sistemaOperativo: 'Android 14',
-        precioOficial: 299.0,
-        sincronizado: false,
-      );
-    }
-
-    _buscandoIA = false;
-    notifyListeners();
-    return _resultadoBusquedaIA;
   }
 
   FichaModel? obtenerPorId(String id) {
@@ -157,70 +135,43 @@ class FichaProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Escritura sin conexión con Cola Outbox (Escritura Offline y Resiliencia):
-  /// 1. Asigna un UUID único del cliente para garantizar idempotencia.
-  /// 2. Aplica actualización optimista guardando en SQLite con sincronizado = 0.
-  /// 3. Encola la operación en la tabla Outbox `cola_operaciones`.
-  /// 4. Dispara el procesamiento asíncrono sin bloquear la interfaz.
+  /// Creación de Ficha Técnica a través del repositorio:
+  /// Maneja respuestas de validación 422 del servidor mapeando errores al formulario.
   Future<bool> guardarFicha(FichaModel nuevaFicha, {String? token}) async {
-    final idLocal = const Uuid().v4();
-    final ahora = DateTime.now().toIso8601String();
-
-    final fichaGuardar = FichaModel(
-      idLocal: idLocal,
-      modelo: nuevaFicha.modelo,
-      fabricante: nuevaFicha.fabricante ?? 'Genérico',
-      procesador: nuevaFicha.procesador,
-      ram: nuevaFicha.ram,
-      almacenamiento: nuevaFicha.almacenamiento,
-      pantalla: nuevaFicha.pantalla,
-      camaraPrincipal: nuevaFicha.camaraPrincipal,
-      camaraFrontal: nuevaFicha.camaraFrontal,
-      bateria: nuevaFicha.bateria,
-      sistemaOperativo: nuevaFicha.sistemaOperativo,
-      conectividad: nuevaFicha.conectividad,
-      extras: nuevaFicha.extras,
-      precioOficial: nuevaFicha.precioOficial,
-      moneda: nuevaFicha.moneda,
-      urlImagen: nuevaFicha.urlImagen,
-      sincronizado: false, // Marcada como pendiente de sincronización
-      fechaGuardadoLocal: ahora,
-    );
-
-    // 1. Guardar localmente en SQLite
-    await _db.insertarOActualizarFicha(fichaGuardar);
-
-    // 2. Encolar en la tabla Outbox con UUID único de cliente
-    final opId = const Uuid().v4();
-    final operacion = OperacionPendienteModel(
-      idOperacion: opId,
-      tipoOperacion: 'CREAR_FICHA',
-      idEntidadLocal: idLocal,
-      payload: jsonEncode(fichaGuardar.toJson()),
-      creadoEn: ahora,
-    );
-    await _db.encolarOperacion(operacion);
-
-    // 3. Actualización optimista en memoria para respuesta instantánea de UI
-    _fichas.insert(0, fichaGuardar);
+    _mensajeError = '';
+    _erroresValidacion = {};
     notifyListeners();
 
-    // 4. Intentar procesar la cola si hay red disponible
-    _syncService.procesarColaPendiente(token: token);
-
-    return true;
+    try {
+      final guardada = await _repositorio.crearFicha(nuevaFicha);
+      _fichas.removeWhere((f) => f.idLocal == guardada.idLocal);
+      _fichas.insert(0, guardada);
+      notifyListeners();
+      return true;
+    } on FalloCliente catch (e) {
+      debugPrint('[FichaProvider] Error de cliente capturado: ${e.mensaje}, campos: ${e.erroresPorCampo}');
+      _mensajeError = e.mensaje;
+      _erroresValidacion = e.erroresPorCampo;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      debugPrint('[FichaProvider] Error al guardar ficha: $e');
+      _mensajeError = 'Ocurrió un error al procesar el guardado';
+      notifyListeners();
+      return false;
+    }
   }
 
   /// Dispara la sincronización manual bajo demanda del usuario
   Future<void> forzarSincronizacion({String? token}) async {
-    await _syncService.procesarColaPendiente(token: token);
-    await _syncService.sincronizarDesdeServidor(token: token);
-    await cargarFichasLocales();
+    await _repositorio.sincronizarTodo();
+    await cargarFichasLocales(sincronizarConServidor: true);
   }
 
   /// Limpia la memoria local del catálogo (llamado en el cierre de sesión)
   void limpiarMemoria() {
     _fichas.clear();
+    _erroresValidacion.clear();
     _resultadoBusquedaIA = null;
     _fichaSeleccionada = null;
     _estado = TipoVistaEstado.vacio;

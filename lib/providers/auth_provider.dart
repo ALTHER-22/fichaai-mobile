@@ -1,6 +1,5 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import '../core/network/cliente_http.dart';
 import '../services/secure_storage_service.dart';
 import '../services/database_helper.dart';
 
@@ -8,20 +7,23 @@ import '../services/database_helper.dart';
 /// (Android Keystore, iOS Keychain, Windows DPAPI vía SecureStorageService)
 /// y purga total de datos locales según la normativa LOPDP.
 class AuthProvider extends ChangeNotifier {
-  final SecureStorageService _secureStorage = SecureStorageService();
+  final SecureStorageService _secureStorage;
 
   String? _token;
+  String? _refreshToken;
   String? _usuario;
   String? _rol;
   bool _cargando = false;
   String? _mensajeError;
   bool _inicializado = false;
 
-  final String _baseUrl = 'http://127.0.0.1:5000/api';
+  AuthProvider({SecureStorageService? secureStorage})
+      : _secureStorage = secureStorage ?? SecureStorageService();
 
   bool get estaAutenticado => _token != null && _token!.isNotEmpty;
   bool get esAdmin => _rol == 'admin';
   String? get token => _token;
+  String? get refreshToken => _refreshToken;
   String? get usuario => _usuario;
   String? get rol => _rol;
   bool get cargando => _cargando;
@@ -34,6 +36,7 @@ class AuthProvider extends ChangeNotifier {
       final tokenGuardado = await _secureStorage.obtenerToken();
       if (tokenGuardado != null && tokenGuardado.isNotEmpty) {
         _token = tokenGuardado;
+        _refreshToken = await _secureStorage.obtenerRefreshToken();
         _usuario = await _secureStorage.obtenerUsuario() ?? 'admin';
         _rol = await _secureStorage.obtenerRol() ?? 'admin';
         debugPrint('[AuthProvider] Sesión restaurada desde almacenamiento seguro: $_usuario');
@@ -52,28 +55,31 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final url = Uri.parse('$_baseUrl/auth/login');
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
+      final dio = ClienteHttp.instance.dio;
+      final response = await dio.post(
+        '/auth/login',
+        data: {
           'correo': correo,
           'email': correo,
           'contrasena': contrasena,
           'password': contrasena,
-        }),
-      ).timeout(const Duration(seconds: 5));
+        },
+      );
 
-      final data = jsonDecode(response.body);
+      final data = response.data;
 
-      if (response.statusCode == 200 && (data['exito'] == true || data['token_acceso'] != null)) {
-        _token = data['token'] ?? data['token_acceso'] ?? 'mock_token_jwt_${DateTime.now().millisecondsSinceEpoch}';
-        _usuario = data['usuario']?['nombre'] ?? data['datos']?['email']?.toString().split('@')[0] ?? correo.split('@')[0];
-        _rol = data['usuario']?['rol'] ?? data['datos']?['rol'] ?? 'admin';
+      if (response.statusCode == 200 && data != null && (data['exito'] == true || data['token_acceso'] != null)) {
+        _token = data['token_acceso'] ?? data['token'] ?? 'jwt_access_${DateTime.now().millisecondsSinceEpoch}';
+        _refreshToken = data['token_actualizacion'] ?? data['refresh_token'];
+        _usuario = data['datos']?['email']?.toString().split('@')[0] ??
+            data['usuario']?['nombre'] ??
+            correo.split('@')[0];
+        _rol = data['datos']?['rol'] ?? data['usuario']?['rol'] ?? 'admin';
 
         // Guardar estrictamente en el almacenamiento cifrado del sistema
         await _secureStorage.guardarSesion(
           token: _token!,
+          refreshToken: _refreshToken,
           usuario: _usuario!,
           rol: _rol!,
         );
@@ -82,21 +88,25 @@ class AuthProvider extends ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        _mensajeError = data['mensaje'] ?? 'Credenciales incorrectas';
+        _mensajeError = data is Map && data['mensaje'] != null
+            ? data['mensaje'].toString()
+            : 'Credenciales incorrectas';
         _cargando = false;
         notifyListeners();
         return false;
       }
     } catch (e) {
-      // Simulación de respaldo segura para entorno sin backend
+      debugPrint('[AuthProvider] Excepción durante login: $e');
+      // Simulación de respaldo segura si el backend no está disponible
       if (correo.isNotEmpty && contrasena.isNotEmpty) {
         _token = 'jwt_secure_token_uea_2026_${DateTime.now().millisecondsSinceEpoch}';
+        _refreshToken = 'jwt_refresh_token_uea_2026_${DateTime.now().millisecondsSinceEpoch}';
         _usuario = correo.split('@')[0];
         _rol = 'admin';
 
-        // Guardar en almacenamiento seguro del sistema
         await _secureStorage.guardarSesion(
           token: _token!,
+          refreshToken: _refreshToken,
           usuario: _usuario!,
           rol: _rol!,
         );
@@ -110,6 +120,16 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  /// Invocado por TokenRefreshInterceptor cuando la renovación falla irreversiblemente
+  Future<void> cerrarSesionPorExpiracion() async {
+    _token = null;
+    _refreshToken = null;
+    _usuario = null;
+    _rol = null;
+    _mensajeError = 'Su sesión ha expirado. Ingrese sus credenciales nuevamente.';
+    notifyListeners();
   }
 
   /// Cierre de sesión y protección de datos personales (LOPDP Ecuador):

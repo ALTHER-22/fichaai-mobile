@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSCameraUsageDescription</key>
+	<string>FichaAI requiere acceso a la cámara para fotografiar los equipos técnicos y asociarlos al inventario in situ.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>FichaAI requiere acceso a la galería para seleccionar imágenes previas de dispositivos que deseas catalogar en tu base local.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>FichaAI registrará la ubicación actual únicamente mientras uses la aplicación, para etiquetar el lugar exacto donde se realizó la inspección del dispositivo.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

@@ -14,7 +14,7 @@ class DatabaseHelper {
   DatabaseHelper._internal();
 
   static Database? _database;
-  static const int _schemaVersion = 1;
+  static const int _schemaVersion = 2; // Incremented for Week 14
   static const String _dbName = 'fichaai_local.db';
 
   Future<Database> get database async {
@@ -70,6 +70,8 @@ class DatabaseHelper {
         precio_oficial REAL,
         moneda TEXT DEFAULT 'USD',
         url_imagen TEXT,
+        ruta_imagen_local TEXT,
+        ubicacion_registro TEXT,
         sincronizado INTEGER NOT NULL DEFAULT 1,
         fecha_servidor TEXT,
         fecha_guardado_local TEXT NOT NULL
@@ -97,10 +99,10 @@ class DatabaseHelper {
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     debugPrint('[DatabaseHelper] Migración incremental de v$oldVersion a v$newVersion');
-    // Ejemplo de migración versionada futura sin destruir datos existentes del usuario:
-    // if (oldVersion < 2) {
-    //   await db.execute('ALTER TABLE fichas ADD COLUMN garantia_meses INTEGER;');
-    // }
+    if (oldVersion < 2) {
+      await db.execute('ALTER TABLE fichas ADD COLUMN ruta_imagen_local TEXT;');
+      await db.execute('ALTER TABLE fichas ADD COLUMN ubicacion_registro TEXT;');
+    }
   }
 
   Future<void> _insertarDatosIniciales(Database db) async {
