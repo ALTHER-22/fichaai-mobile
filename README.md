@@ -1,40 +1,65 @@
-# FichaAI - Aplicación Móvil
+# 📱 FichaAI - Aplicación Móvil Android
 
-Este repositorio contiene el código fuente de la aplicación móvil del proyecto **FichaAI** construida en Flutter, así como la documentación técnica para la configuración del entorno de desarrollo.
+[![Flutter](https://img.shields.io/badge/Flutter-3.47.0-02569B?logo=flutter)](https://flutter.dev)
+[![Dart](https://img.shields.io/badge/Dart-3.13.0-0175C2?logo=dart)](https://dart.dev)
+[![Android](https://img.shields.io/badge/Plataforma-Android%20%28Tablet%20%2F%20Móvil%29-3DDC84?logo=android)](https://developer.android.com)
+[![Backend Live](https://img.shields.io/badge/Backend-Render%20Cloud%20Active-brightgreen)](https://fichaai-backend.onrender.com/api/health)
+[![Release](https://img.shields.io/badge/Release-v1.0.0%20Oficial-blue)](https://github.com/ALTHER-22/fichaai-mobile/releases/tag/v1.0.0)
 
-## Entorno de Desarrollo Móvil
+**FichaAI Mobile** es el cliente oficial para Android del sistema inteligente de generación y consulta de fichas técnicas oficiales de smartphones, impulsado por **Google Gemini AI** y respaldado por el catálogo en tiempo real de **GSMArena** (>6,000 modelos de teléfonos).
 
-Para el desarrollo del cliente móvil se seleccionó el framework **Flutter** debido a su capacidad de generar aplicaciones compiladas nativamente para múltiples plataformas desde una única base de código, garantizando alto rendimiento y control total sobre los píxeles de la interfaz.
+---
 
-### Versiones Instaladas
+## 📥 Descarga e Instalación Directa (Para Evaluación)
 
-- **Flutter SDK**: 3.47.0 (Stable)
-- **Dart SDK**: 3.13.0
-- **Android Studio**: Última versión estable
-- **Android SDK**: API Level 36 (Tiramisu/UpsideDownCake)
+Para probar la aplicación directamente en cualquier **teléfono o tablet Android**:
 
-### Pasos de Configuración y Ejecución (Reproducible)
+### 📲 [👉 **DESCARGAR APK OFICIAL (v1.0.0)** 👈](https://github.com/ALTHER-22/fichaai-mobile/releases/download/v1.0.0/app-release.apk)
 
-1. **Configuración del Entorno Móvil (Flutter):**
-   - Descargar e instalar el Flutter SDK y agregarlo al PATH.
-   - Instalar Android Studio y configurar un dispositivo virtual (AVD) o conectar un dispositivo físico mediante depuración USB.
-   - Aceptar las licencias nativas ejecutando: `flutter doctor --android-licenses`
+> **Instrucciones rápidas para el dispositivo:**
+> 1. Abre el enlace anterior desde el navegador del dispositivo Android (o tablet).
+> 2. Una vez descargado el archivo `app-release.apk`, pulsa sobre la notificación de descarga o búscalo en la carpeta *Descargas*.
+> 3. Si el sistema solicita confirmación, selecciona **"Permitir instalar aplicaciones de fuentes desconocidas"** para ese navegador.
+> 4. Pulsa **Instalar** y abre **FichaAI**.
 
-2. **Ejecutar comando de diagnóstico:**
-   Para verificar que no existen hallazgos pendientes en el entorno, ejecutar:
-   ```bash
-   flutter doctor -v
-   ```
-   *(Todos los checks principales de Flutter, Android Toolchain y el editor deben tener un check verde).*
+---
 
-3. **Variables de Entorno y Direccionamiento (Frontend):**
-   Para conectar la aplicación con el backend local sin cifrar (exclusivo para desarrollo), se utiliza la URL base configurada dinámicamente:
-   - **Emulador Android**: Utilizar `http://10.0.2.2:5000/api`
-   - **Dispositivo Físico**: Utilizar `http://<IP-LOCAL-PC>:5000/api`
+## 🚀 Funcionalidades Principales
 
-4. **Lanzar la Aplicación Móvil:**
-   Dentro del directorio del proyecto Flutter, ejecutar:
-   ```bash
-   flutter run
-   ```
-   *La recarga en caliente (Hot Reload) está operativa pulsando la tecla `r` en la terminal o guardando archivos en el IDE soportado (VS Code/Android Studio).*
+- **Buscador Inteligente con IA:** Extrae automáticamente la ficha técnica oficial con solo escribir el nombre o modelo comercial.
+- **Galería Oficial HD Multi-Ángulo:** Renders de estudio en alta resolución (700px - 1024px) extraídos directamente del catálogo oficial.
+- **Precios MSRP Oficiales:** Cálculo del precio oficial de lanzamiento global unificado en **USD ($)**.
+- **Arquitectura Offline-First:** Arranque ultrarrápido sin pantallas de bloqueo y sincronización bidireccional asíncrona con el backend en la nube.
+- **Modelos de Prueba Sugeridos:**
+  - `Honor Magic 8 Lite`
+  - `Tecno Spark 20 Pro Plus`
+  - `Samsung Galaxy A55 5G`
+  - `Xiaomi 14 Ultra`
+  - `iPhone 16 Pro`
+
+---
+
+## 🌐 Conexión con el Backend en la Nube
+
+La aplicación móvil ya está compilada y enlazada de forma nativa con el servidor de producción:
+- **API URL Base:** `https://fichaai-backend.onrender.com/api`
+- **Estado de Servicio (Health Check):** `https://fichaai-backend.onrender.com/api/health`
+
+---
+
+## 🛠️ Entorno de Desarrollo y Compilación Local
+
+### Versiones del Entorno
+- **Flutter SDK:** 3.47.0 (Stable)
+- **Dart SDK:** 3.13.0
+- **Android Gradle Plugin / Kotlin:** Gradle 9.3+ compatible
+- **Target SDK:** Android API Level 36 (Android 14+)
+
+### Ejecución en Modo Desarrollo
+```bash
+# Obtener dependencias
+flutter pub get
+
+# Ejecutar conectando a producción
+flutter run --dart-define=AMBIENTE=prod --dart-define=API_URL=https://fichaai-backend.onrender.com/api
+```
