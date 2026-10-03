@@ -45,7 +45,8 @@ void main() async {
 
   // Cargar catálogo local offline-first desde base de datos SQLite y sincronizar en paralelo
   final fichaProvider = FichaProvider();
-  await fichaProvider.cargarFichasLocales(sincronizarConServidor: true);
+  await fichaProvider.cargarFichasLocales(sincronizarConServidor: false);
+  fichaProvider.forzarSincronizacion();
 
   // Inicializar worker de sincronización Outbox
   SyncService.instance.inicializar(getToken: () => authProvider.token);
@@ -128,3 +129,4 @@ class _FichaAIAppState extends State<FichaAIApp> {
     );
   }
 }
+
